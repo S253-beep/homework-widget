@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Homework</title>
+<style>
+  :root {
+    --bg: #000000;
+    --ink: #f2f2f2;
+    --muted: #6b6b6b;
+    --dim: #3a3a3a;
+    --due-today: #ff6b4a;
+    --due-soon: #d8c27a;
+    --rule: #1c1c1c;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 32px) 34px calc(env(safe-area-inset-bottom) + 28px);
+    min-height: 100vh;
+  }
+
+  .clock {
+    flex: 0 0 auto;
+    text-align: center;
+    margin-bottom: 6vh;
+  }
+
+  .clock time {
+    font-size: clamp(56px, 15vw, 108px);
+    font-weight: 200;
+    letter-spacing: -2px;
+    line-height: 1;
+    display: block;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .clock .date {
+    margin-top: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.2px;
+  }
+
+  .list {
+    flex: 1 1 auto;
+    overflow: hidden;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .group + .group { margin-top: 22px; }
+
+  .group h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  .group.today h2 { color: var(--due-today); }
+  .group.soon h2 { color: var(--due-soon); }
+  .group.later h2 { color: var(--muted); }
+
+  .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .item:last-child { border-bottom: none; }
+
+  .item .subject {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--ink);
+    flex: 0 0 auto;
+    min-width: 84px;
+  }
+
+  .item .text {
+    font-size: 15px;
+    color: #b8b8b8;
+    flex: 1 1 auto;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .empty, .error {
+    text-align: center;
+    color: var(--muted);
+    font-size: 15px;
+    margin-top: 40px;
+  }
+  .error { color: var(--due-today); }
+</style>
+</head>
+<body>
+
+  <div class="clock">
+    <time id="clock">--:--</time>
+    <div class="date" id="date"></div>
+  </div>
+
+  <div class="list" id="list">
+    <div class="empty">Loading homework…</div>
+  </div>
+
+<script>
+  // ---- Live clock ----
+  function pad(n) { return String(n).padStart(2, "0"); }
+
+  function tick() {
+    const now = new Date();
+    document.getElementById("clock").textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    document.getElementById("date").textContent = now.toLocaleDateString(undefined, {
+      weekday: "long", day: "numeric", month: "long"
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // ---- Homework ----
+  const CACHE_KEY = "untis_homework_cache_v1";
+
+  function untisDateToJS(n) {
+    const s = String(n);
+    return new Date(`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T00:00:00`);
+  }
+
+  function dayLabel(jsDate) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const d = new Date(jsDate); d.setHours(0,0,0,0);
+    const diffDays = Math.round((d - today) / 86400000);
+    if (diffDays === 0) return { key: "today", label: "Due today" };
+    if (diffDays === 1) return { key: "soon", label: "Due tomorrow" };
+    if (diffDays > 1 && diffDays <= 7) return { key: "later", label: d.toLocaleDateString(undefined, { weekday: "long" }) };
+    return { key: "later", label: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) };
+  }
+
+  function render(items) {
+    const list = document.getElementById("list");
+    if (!items || items.length === 0) {
+      list.innerHTML = '<div class="empty">Nothing due — you\'re clear.</div>';
+      return;
+    }
+
+    const groups = new Map(); // key -> { label, key, items: [] }
+    for (const hw of items) {
+      const due = untisDateToJS(hw.dueDate);
+      const { key, label } = dayLabel(due);
+      const groupKey = label; // group by exact label so e.g. each weekday is separate
+      if (!groups.has(groupKey)) groups.set(groupKey, { key, label, items: [] });
+      groups.get(groupKey).items.push(hw);
+    }
+
+    let html = "";
+    for (const { key, label, items } of groups.values()) {
+      html += `<div class="group ${key}"><h2>${label}</h2>`;
+      for (const hw of items) {
+        const subject = hw.subject || "Homework";
+        html += `<div class="item"><span class="subject">${escapeHtml(subject)}</span><span class="text">${escapeHtml(hw.text || "")}</span></div>`;
+      }
+      html += `</div>`;
+    }
+    list.innerHTML = html;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function loadHomework() {
+    try {
+      const res = await fetch("/api/homework", { cache: "no-store" });
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const data = await res.json();
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      render(data.items);
+    } catch (err) {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        render(JSON.parse(cached).items);
+      } else {
+        document.getElementById("list").innerHTML =
+          `<div class="error">Couldn't reach WebUntis. Will retry…</div>`;
+      }
+    }
+  }
+
+  loadHomework();
+  setInterval(loadHomework, 5 * 60 * 1000); // refresh every 5 minutes
+</script>
+</body>
+</html>

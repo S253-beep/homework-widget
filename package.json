@@ -1,0 +1,9 @@
+{
+  "name": "untis-homework-widget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimalist iPad home-screen page showing the time and upcoming WebUntis homework.",
+  "engines": {
+    "node": ">=18"
+  }
+}
